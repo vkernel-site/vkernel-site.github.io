@@ -19,12 +19,9 @@
       box-sizing: border-box;
     }
     .input-line {
-      display: block;
-    }
-    .prompt {
       display: inline;
     }
-    .input {
+    #input {
       background: transparent;
       border: none;
       color: #00ff88;
@@ -32,6 +29,11 @@
       font-size: inherit;
       outline: none;
       width: auto;
+    }
+    .matrix {
+      color: #00ff00;
+      white-space: pre;
+      font-family: monospace;
     }
   </style>
 </head>
@@ -44,7 +46,7 @@
     let history = [];
     let historyIndex = -1;
 
-    const fileSystem = {
+    let fileSystem = {
       '/': ['home', 'bin', 'tmp', 'var', 'etc'],
       '/home': ['user'],
       '/home/user': ['file.txt'],
@@ -54,15 +56,57 @@
       '/bin': ['ls', 'echo', 'cat', 'touch']
     };
 
-    const files = {
+    let files = {
       '/home/user/file.txt': 'Hello from VKernel!'
     };
 
     function resolvePath(path) {
       if (!path || path === '.') return currentDir;
-      if (path === '..') return currentDir === '/' ? '/' : currentDir.substring(0, currentDir.lastIndexOf('/')) || '/';
+      if (path === '..') {
+        return currentDir === '/' ? '/' : currentDir.substring(0, currentDir.lastIndexOf('/')) || '/';
+      }
       if (path.startsWith('/')) return path;
       return currentDir === '/' ? '/' + path : currentDir + '/' + path;
+    }
+
+    let cmatrixRunning = false;
+    let cmatrixInterval = null;
+    let cmatrixDiv = null;
+
+    function startCMatrix() {
+      cmatrixRunning = true;
+      cmatrixDiv = document.createElement('div');
+      cmatrixDiv.className = 'matrix';
+      terminal.appendChild(cmatrixDiv);
+
+      let cols = Math.floor(window.innerWidth / 10);
+      let drops = Array(cols).fill(1);
+
+      cmatrixInterval = setInterval(() => {
+        let text = '';
+        for (let i = 0; i < cols; i++) {
+          if (Math.random() > 0.975) drops[i] = 0;
+          const char = String.fromCharCode(0x30A0 + Math.random() * 96);
+          text += char + ' ';
+          drops[i]++;
+        }
+        cmatrixDiv.textContent += text + '\n';
+        terminal.scrollTop = terminal.scrollHeight;
+        if (cmatrixDiv.textContent.split('\n').length > 40) {
+          cmatrixDiv.textContent = '';
+        }
+      }, 100);
+    }
+
+    function stopCMatrix() {
+      if (cmatrixRunning) {
+        clearInterval(cmatrixInterval);
+        cmatrixDiv.textContent += '\n[cmatrix exited]';
+        cmatrixRunning = false;
+        cmatrixInterval = null;
+        cmatrixDiv = null;
+        printPrompt();
+      }
     }
 
     const commands = {
@@ -70,7 +114,6 @@
       ls: () => (fileSystem[currentDir] || []).join('  '),
       pwd: () => currentDir,
       cd: ([path]) => {
-        if (!path) return 'Missing argument';
         const newPath = resolvePath(path);
         if (fileSystem[newPath]) {
           currentDir = newPath;
@@ -79,32 +122,26 @@
         return 'No such directory';
       },
       mkdir: ([dir]) => {
-        if (!dir) return 'Missing directory name';
         const path = resolvePath(dir);
         const parent = path.substring(0, path.lastIndexOf('/')) || '/';
         const name = path.split('/').pop();
         if (!fileSystem[parent]) return 'Parent directory not found';
-        if (fileSystem[path]) return 'Directory already exists';
         fileSystem[path] = [];
         fileSystem[parent].push(name);
         return '';
       },
       touch: ([filename]) => {
-        if (!filename) return 'Missing file name';
         const path = resolvePath(filename);
         const dir = path.substring(0, path.lastIndexOf('/')) || '/';
         const name = path.split('/').pop();
         if (!fileSystem[dir]) return 'Directory not found';
-        if (!fileSystem[dir].includes(name)) fileSystem[dir].push(name);
+        fileSystem[dir].push(name);
         files[path] = '';
         return '';
       },
       echo: (args) => args.join(' '),
-      cat: ([file]) => {
-        if (!file) return 'Missing file name';
-        return files[resolvePath(file)] ?? 'No such file';
-      },
-      clear: () => { terminal.innerHTML = ''; return ''; },
+      cat: ([file]) => files[resolvePath(file)] ?? 'No such file',
+      clear: () => { terminal.innerHTML = ''; stopCMatrix(); return ''; },
       whoami: () => 'user',
       date: () => new Date().toString(),
       uname: () => 'VKernel 2.2.8-AprilFools x86_64',
@@ -116,7 +153,6 @@
       env: () => 'HOME=/home/user\nSHELL=/bin/bash',
       alias: () => 'alias ll="ls -l"',
       rm: ([file]) => {
-        if (!file) return 'Missing file name';
         const path = resolvePath(file);
         const dir = path.substring(0, path.lastIndexOf('/')) || '/';
         const name = path.split('/').pop();
@@ -138,31 +174,37 @@
         }
       },
       test: () => 'true',
-      yes: () => Array(10).fill('y').join('\n'),
-      sleep: () => 'Sleeping... (not really)',
-      type: ([cmd]) => cmd ? `${cmd} is a shell builtin` : 'Missing command name',
-      which: ([cmd]) => cmd ? `/bin/${cmd}` : 'Missing command name',
-      basename: ([path]) => path ? path.split('/').pop() : 'Missing path',
-      dirname: ([path]) => path ? path.split('/').slice(0, -1).join('/') || '/' : 'Missing path',
+      yes: () => 'y\ny\ny\ny\ny\ny\ny',
+      sleep: () => 'Sleeping...',
+      type: ([cmd]) => `${cmd} is a shell builtin`,
+      which: ([cmd]) => `/bin/${cmd}`,
+      basename: ([path]) => path.split('/').pop(),
+      dirname: ([path]) => path.split('/').slice(0, -1).join('/') || '/',
+      cmatrix: () => {
+        if (cmatrixRunning) return '[cmatrix already running]';
+        startCMatrix();
+        return '[cmatrix started - press Ctrl+C to stop]';
+      },
     };
 
     function printPrompt() {
-      const promptLine = document.createElement('div');
-      promptLine.classList.add('input-line');
-      promptLine.innerHTML = `<span class="prompt">$ ${currentDir} </span><input class="input" autofocus />`;
-      terminal.appendChild(promptLine);
-      promptLine.querySelector('input').focus();
+      if (cmatrixRunning) return;
+      const prompt = document.createElement('div');
+      prompt.classList.add('input-line');
+      prompt.innerHTML = `$ ${currentDir} <input id="input" autofocus />`;
+      terminal.appendChild(prompt);
+      document.getElementById("input").focus();
     }
 
-    function runCommand(inputText) {
-      const lastInput = terminal.querySelector('.input-line:last-child');
-      const inputElem = lastInput.querySelector('input');
-      lastInput.innerHTML = `<span class="prompt">$ ${currentDir} ${inputText}</span>`;
+    function runCommand(text) {
+      const line = document.querySelector('.input-line');
+      const inputElem = line.querySelector('input');
+      line.innerHTML = `$ ${currentDir} ${text}`;
 
-      history.push(inputText);
+      history.push(text);
       historyIndex = history.length;
 
-      const parts = inputText.trim().split(/\s+/);
+      const parts = text.trim().split(/\s+/);
       const cmd = parts[0];
       const args = parts.slice(1);
 
@@ -174,9 +216,9 @@
       }
 
       if (output) {
-        const outElem = document.createElement('div');
-        outElem.textContent = output;
-        terminal.appendChild(outElem);
+        const outputElem = document.createElement('div');
+        outputElem.textContent = output;
+        terminal.appendChild(outputElem);
       }
 
       printPrompt();
@@ -187,11 +229,21 @@
       printPrompt();
 
       terminal.addEventListener("keydown", (e) => {
-        const input = terminal.querySelector('.input-line:last-child .input');
+        const input = document.getElementById("input");
         if (!input) return;
 
         if (e.key === "Enter") {
           runCommand(input.value);
+        } else if (e.ctrlKey && e.key === "c") {
+          if (cmatrixRunning) {
+            stopCMatrix();
+          } else {
+            const line = document.querySelector(".input-line");
+            if (input && line) {
+              line.innerHTML = `$ ${currentDir} ${input.value}<br>^C`;
+              printPrompt();
+            }
+          }
         } else if (e.key === "ArrowUp") {
           if (historyIndex > 0) {
             historyIndex--;
