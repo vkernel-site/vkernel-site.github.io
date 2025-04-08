@@ -2,28 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>VKernel 2.2.8 April Fools</title>
+  <title>Terminal</title>
   <style>
     body {
       margin: 0;
       background: #000;
       color: #00ff88;
       font-family: 'Courier New', monospace;
-      font-size: 16px;
-    }
-    #container {
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      padding: 20px;
-      box-sizing: border-box;
+      font-size: 18px;
     }
     #terminal {
-      flex: 1;
-      overflow-y: auto;
+      padding: 20px;
       white-space: pre-wrap;
-      padding-bottom: 10px;
+      overflow-y: auto;
+      height: 100vh;
     }
     #input-line {
       display: flex;
@@ -33,33 +25,19 @@
       border: none;
       color: #00ff88;
       font-family: inherit;
-      font-size: 16px;
+      font-size: inherit;
       outline: none;
       flex: 1;
     }
     .prompt {
       margin-right: 5px;
     }
-    .banner {
-      color: #00ffff;
-      text-align: center;
-      font-weight: bold;
-      padding-bottom: 10px;
-    }
   </style>
 </head>
 <body>
-  <div id="container">
-    <div class="banner">Welcome to VKernel 2.2.8 April Fools</div>
-    <div id="terminal"></div>
-    <div id="input-line">
-      <span class="prompt">$</span>
-      <input id="input" autofocus autocomplete="off" />
-    </div>
-  </div>
+  <div id="terminal"></div>
   <script>
     const terminal = document.getElementById("terminal");
-    const input = document.getElementById("input");
 
     let fileSystem = {
       '/': ['home', 'bin', 'tmp', 'var', 'etc'],
@@ -77,9 +55,11 @@
     };
 
     function resolvePath(path) {
-      if (!path || path === '.') return currentDir;
+      if (!path) return currentDir;
       if (path === '..') {
-        return currentDir === '/' ? '/' : currentDir.split('/').slice(0, -1).join('/') || '/';
+        const parts = currentDir.split('/');
+        parts.pop();
+        return parts.join('/') || '/';
       }
       if (path.startsWith('/')) return path;
       return currentDir === '/' ? '/' + path : currentDir + '/' + path;
@@ -221,29 +201,42 @@
     };
 
     function runCommand(text) {
-      terminal.innerHTML += `\n$ ${text}`;
+      const line = document.createElement('div');
+      line.textContent = `$ ${text}`;
+      terminal.appendChild(line);
       history.push(text);
       const parts = text.trim().split(/\s+/);
       const cmd = parts[0];
       const args = parts.slice(1);
+      const output = document.createElement('div');
       if (commands[cmd]) {
         const result = commands[cmd](args);
-        if (result !== '') terminal.innerHTML += `\n${result}`;
+        if (result !== '') output.textContent = result;
       } else {
-        terminal.innerHTML += `\n${cmd}: command not found`;
+        output.textContent = `${cmd}: command not found`;
       }
+      terminal.appendChild(output);
+      printPrompt();
       terminal.scrollTop = terminal.scrollHeight;
     }
 
-    input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") {
-        const val = input.value;
-        runCommand(val);
-        input.value = '';
-      }
-    });
+    function printPrompt() {
+      const inputLine = document.createElement('div');
+      inputLine.id = 'input-line';
+      inputLine.innerHTML = `<span class="prompt">$</span><input id="input" autofocus autocomplete="off" />`;
+      terminal.appendChild(inputLine);
+      const input = document.getElementById('input');
+      input.focus();
+      input.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          const val = input.value;
+          input.disabled = true;
+          runCommand(val);
+        }
+      });
+    }
 
-    runCommand('help');
+    printPrompt();
   </script>
 </body>
 </html>
