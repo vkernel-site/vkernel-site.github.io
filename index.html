@@ -12,18 +12,17 @@
       font-size: 16px;
     }
     #container {
-      max-width: 1000px;
-      margin: 20px auto;
-      border: 2px solid #00ff88;
-      border-radius: 10px;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
       padding: 20px;
-      box-shadow: 0 0 20px #00ff88;
-      background: #000;
+      box-sizing: border-box;
     }
     #terminal {
-      white-space: pre-wrap;
+      flex: 1;
       overflow-y: auto;
-      max-height: 70vh;
+      white-space: pre-wrap;
       padding-bottom: 10px;
     }
     #input-line {
@@ -78,7 +77,10 @@
     };
 
     function resolvePath(path) {
-      if (!path) return currentDir;
+      if (!path || path === '.') return currentDir;
+      if (path === '..') {
+        return currentDir === '/' ? '/' : currentDir.split('/').slice(0, -1).join('/') || '/';
+      }
       if (path.startsWith('/')) return path;
       return currentDir === '/' ? '/' + path : currentDir + '/' + path;
     }
